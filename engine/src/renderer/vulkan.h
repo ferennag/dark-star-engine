@@ -101,6 +101,10 @@ private:
 
     void createSwapChain();
 
+    void cleanupSwapChain();
+
+    void recreateSwapChain();
+
     VkShaderModule createShaderModule(const std::string &shaderFilePath);
 
     void createRenderPass();

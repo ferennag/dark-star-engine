@@ -22,16 +22,14 @@ void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
 
 Vulkan::~Vulkan() {
     vkDeviceWaitIdle(device);
-    
+
     vkDestroyFence(device, inFlightFence, allocationCallbacks);
     vkDestroySemaphore(device, imageAvailableSemaphore, allocationCallbacks);
     vkDestroySemaphore(device, renderFinishedSemaphore, allocationCallbacks);
 
     vkDestroyCommandPool(device, commandPool, allocationCallbacks);
 
-    for (auto &frameBuffer: frameBuffers) {
-        vkDestroyFramebuffer(device, frameBuffer, allocationCallbacks);
-    }
+    cleanupSwapChain();
 
     vkDestroyPipeline(device, pipeline, allocationCallbacks);
     vkDestroyRenderPass(device, renderPass, allocationCallbacks);
@@ -41,15 +39,10 @@ Vulkan::~Vulkan() {
         vkDestroyShaderModule(device, shaderModule, allocationCallbacks);
     }
 
-    for (auto &imageView: imageViews) {
-        vkDestroyImageView(device, imageView, allocationCallbacks);
-    }
-
     auto debugUtilsDestroyFunc = (PFN_vkDestroyDebugUtilsMessengerEXT)
             vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
     debugUtilsDestroyFunc(instance, debugUtilsMessenger, allocationCallbacks);
 
-    vkDestroySwapchainKHR(device, swapChain, allocationCallbacks);
     vkDestroyDevice(device, allocationCallbacks);
     vkDestroySurfaceKHR(instance, surface, allocationCallbacks);
     vkDestroyInstance(instance, allocationCallbacks);
@@ -273,6 +266,10 @@ void Vulkan::createDevice() {
     createInfo.flags = 0;
 
     VK_CHECK(vkCreateDevice(physicalDevice.vkPhysicalDevice, &createInfo, allocationCallbacks, &device))
+
+    for (auto &queueFamily: queueFamilies) {
+        vkGetDeviceQueue(device, queueFamily.index, 0, &queueFamily.queue);
+    }
 }
 
 VkSurfaceFormatKHR Vulkan::selectSurfaceFormat() {
@@ -368,10 +365,29 @@ void Vulkan::createSwapChain() {
         VK_CHECK(vkCreateImageView(device, &imageViewCreateInfo, allocationCallbacks, &imageView))
         imageViews.push_back(imageView);
     }
+}
 
-    for (auto &queueFamily: queueFamilies) {
-        vkGetDeviceQueue(device, queueFamily.index, 0, &queueFamily.queue);
+void Vulkan::cleanupSwapChain() {
+    for (auto &frameBuffer: frameBuffers) {
+        vkDestroyFramebuffer(device, frameBuffer, allocationCallbacks);
     }
+    frameBuffers.clear();
+
+    for (auto &imageView: imageViews) {
+        vkDestroyImageView(device, imageView, allocationCallbacks);
+    }
+    imageViews.clear();
+
+    vkDestroySwapchainKHR(device, swapChain, allocationCallbacks);
+}
+
+void Vulkan::recreateSwapChain() {
+    VK_CHECK(vkDeviceWaitIdle(device))
+
+    cleanupSwapChain();
+
+    createSwapChain();
+    createFrameBuffers();
 }
 
 VkShaderModule Vulkan::createShaderModule(const std::string &shaderFilePath) {
@@ -597,11 +613,18 @@ void Vulkan::recordCommands(VkCommandBuffer &commandBuffer, uint32_t imageIndex)
 
 void Vulkan::renderFrame() {
     VK_CHECK(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX))
-    vkResetFences(device, 1, &inFlightFence);
 
     uint32_t imageIndex = 0;
-    VK_CHECK(vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex))
+    auto result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
 
+    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        recreateSwapChain();
+        return;
+    } else if(result != VK_SUCCESS) {
+        throw std::runtime_error(string_VkResult(result));
+    }
+
+    vkResetFences(device, 1, &inFlightFence);
     vkResetCommandBuffer(commandBuffer, 0);
     recordCommands(commandBuffer, imageIndex);
 
