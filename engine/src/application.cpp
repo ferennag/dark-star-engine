@@ -30,6 +30,7 @@ void Application::start() {
 
     while (running) {
         running = processEvents();
+        vulkan.update();
         vulkan.renderFrame();
     }
 }

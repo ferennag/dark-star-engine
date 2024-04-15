@@ -5,6 +5,12 @@ FetchContent_Declare(SDL2
 )
 FetchContent_MakeAvailable(SDL2)
 
+FetchContent_Declare(glm
+        GIT_REPOSITORY https://github.com/g-truc/glm
+        GIT_TAG 1.0.1
+)
+FetchContent_MakeAvailable(glm)
+
 find_package(Vulkan REQUIRED)
 
 add_library(dark_star_engine SHARED
@@ -18,7 +24,7 @@ add_library(dark_star_engine SHARED
         src/core/file.h
 )
 
-target_link_libraries(dark_star_engine SDL2::SDL2 Vulkan::Vulkan)
+target_link_libraries(dark_star_engine SDL2::SDL2 Vulkan::Vulkan glm)
 target_include_directories(dark_star_engine PUBLIC src)
 target_compile_options(dark_star_engine PRIVATE -g -Wall)
 
@@ -43,3 +49,4 @@ function(add_shaders TARGET_NAME)
 endfunction()
 
 add_shaders(dark_star_engine_shaders basic.vert basic.frag)
+add_dependencies(dark_star_engine dark_star_engine_shaders)

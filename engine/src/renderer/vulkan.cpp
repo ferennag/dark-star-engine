@@ -5,6 +5,12 @@
 #include <SDL_vulkan.h>
 #include "core/file.h"
 
+const std::vector<Vertex> vertices = {
+        {{0.0f,  -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f,  0.5f,  0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, 0.5f,  0.0f}, {0.0f, 0.0f, 1.0f}}
+};
+
 void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
     createInstance(applicationName, window);
     createDebugUtilsMessenger();
@@ -15,6 +21,7 @@ void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
     createRenderPass();
     createPipeline();
     createFrameBuffers();
+    createVertexBuffer(vertices);
     createCommandPool();
     createCommandBuffer();
     createSyncObjects();
@@ -22,6 +29,9 @@ void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
 
 Vulkan::~Vulkan() {
     vkDeviceWaitIdle(device);
+
+    vkDestroyBuffer(device, vertexBuffer, allocationCallbacks);
+    vkFreeMemory(device, vertexBufferMemory, allocationCallbacks);
 
     vkDestroyFence(device, inFlightFence, allocationCallbacks);
     vkDestroySemaphore(device, imageAvailableSemaphore, allocationCallbacks);
@@ -476,11 +486,14 @@ void Vulkan::createPipeline() {
     dynamicState.dynamicStateCount = dynamicStates.size();
     dynamicState.pDynamicStates = dynamicStates.data();
 
+    auto vertexBinding = Vertex::getBindingDescription();
+    auto vertexAttributes = Vertex::getAttributeDescriptions();
+
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
-    vertexInputInfo.vertexBindingDescriptionCount = 0;
-    vertexInputInfo.pVertexBindingDescriptions = nullptr; // Optional
-    vertexInputInfo.vertexAttributeDescriptionCount = 0;
-    vertexInputInfo.pVertexAttributeDescriptions = nullptr; // Optional
+    vertexInputInfo.vertexBindingDescriptionCount = 1;
+    vertexInputInfo.pVertexBindingDescriptions = &vertexBinding;
+    vertexInputInfo.vertexAttributeDescriptionCount = vertexAttributes.size();
+    vertexInputInfo.pVertexAttributeDescriptions = vertexAttributes.data();
 
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO};
     inputAssembly.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
@@ -547,6 +560,39 @@ void Vulkan::createFrameBuffers() {
     }
 }
 
+void Vulkan::createVertexBuffer(const std::vector<Vertex> &vertices) {
+    VkBufferCreateInfo createInfo{VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+    createInfo.size = vertices.size() * sizeof(Vertex);
+    createInfo.usage = VK_BUFFER_USAGE_2_VERTEX_BUFFER_BIT_KHR;
+    createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    VK_CHECK(vkCreateBuffer(device, &createInfo, allocationCallbacks, &vertexBuffer))
+    vkGetBufferMemoryRequirements(device, vertexBuffer, &vertexBufferMemoryRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = vertexBufferMemoryRequirements.size;
+    allocInfo.memoryTypeIndex = findMemoryType(vertexBufferMemoryRequirements.memoryTypeBits,
+                                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &vertexBufferMemory))
+
+    VK_CHECK(vkBindBufferMemory(device, vertexBuffer, vertexBufferMemory, 0))
+}
+
+uint32_t Vulkan::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(physicalDevice.vkPhysicalDevice, &memProperties);
+
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    throw std::runtime_error("Failed to find suitable memory type!");
+}
+
 void Vulkan::createCommandPool() {
     VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -609,11 +655,22 @@ void Vulkan::recordCommands(VkCommandBuffer &commandBuffer, uint32_t imageIndex)
     scissor.extent = swapChainExtent;
     vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+    VkBuffer vertexBuffers[] = {vertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
     vkCmdDraw(commandBuffer, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 
     VK_CHECK(vkEndCommandBuffer(commandBuffer))
+}
+
+void Vulkan::update() {
+    void *data = nullptr;
+    VK_CHECK(vkMapMemory(device, vertexBufferMemory, 0, sizeof(Vertex) * vertices.size(), 0, &data))
+    memcpy(data, vertices.data(), sizeof(Vertex) * vertices.size());
+    vkUnmapMemory(device, vertexBufferMemory);
 }
 
 void Vulkan::renderFrame() {
