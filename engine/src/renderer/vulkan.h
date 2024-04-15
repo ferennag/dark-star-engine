@@ -5,6 +5,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <map>
 #include <vulkan/vulkan.h>
 #include <vulkan/vk_enum_string_helper.h>
 
@@ -34,6 +35,12 @@ typedef struct QueueFamily {
     VkQueue queue;
 } QueueFamily;
 
+enum QueueType {
+    GRAPHICS,
+    PRESENT,
+    COMPUTE
+};
+
 class Vulkan {
 public:
     Vulkan() = default;
@@ -57,6 +64,7 @@ private:
     VkExtent2D swapChainExtent;
 
     std::vector<QueueFamily> queueFamilies;
+    std::multimap<QueueType, QueueFamily> queueFamilyMap;
     std::vector<VkImage> images;
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> frameBuffers;

@@ -269,6 +269,16 @@ void Vulkan::createDevice() {
 
     for (auto &queueFamily: queueFamilies) {
         vkGetDeviceQueue(device, queueFamily.index, 0, &queueFamily.queue);
+
+        if (queueFamily.graphics) {
+            queueFamilyMap.emplace(QueueType::GRAPHICS, queueFamily);
+        }
+        if (queueFamily.compute) {
+            queueFamilyMap.emplace(QueueType::COMPUTE, queueFamily);
+        }
+        if (queueFamily.present) {
+            queueFamilyMap.emplace(QueueType::PRESENT, queueFamily);
+        }
     }
 }
 
@@ -316,10 +326,7 @@ VkPresentModeKHR Vulkan::selectPresentMode() {
 void Vulkan::createSwapChain() {
     surfaceFormat = selectSurfaceFormat();
 
-    auto found = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const QueueFamily &family) -> bool {
-        return family.present;
-    });
-
+    auto presentQueue = queueFamilyMap.find(QueueType::PRESENT)->second;
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice.vkPhysicalDevice, surface, &surfaceCapabilities))
 
@@ -336,7 +343,7 @@ void Vulkan::createSwapChain() {
     createInfo.imageArrayLayers = 1;
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.queueFamilyIndexCount = 1;
-    createInfo.pQueueFamilyIndices = &found->index;
+    createInfo.pQueueFamilyIndices = &presentQueue.index;
     createInfo.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
     createInfo.imageExtent = surfaceCapabilities.currentExtent;
 
@@ -544,11 +551,9 @@ void Vulkan::createCommandPool() {
     VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    auto found = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const QueueFamily &family) {
-        return family.graphics;
-    });
+    auto graphicsQueue = queueFamilyMap.find(QueueType::GRAPHICS)->second;
 
-    createInfo.queueFamilyIndex = found->index;
+    createInfo.queueFamilyIndex = graphicsQueue.index;
     VK_CHECK(vkCreateCommandPool(device, &createInfo, allocationCallbacks, &commandPool));
 }
 
@@ -615,12 +620,13 @@ void Vulkan::renderFrame() {
     VK_CHECK(vkWaitForFences(device, 1, &inFlightFence, VK_TRUE, UINT64_MAX))
 
     uint32_t imageIndex = 0;
-    auto result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+    auto result = vkAcquireNextImageKHR(device, swapChain, UINT64_MAX, imageAvailableSemaphore, VK_NULL_HANDLE,
+                                        &imageIndex);
 
     if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
         recreateSwapChain();
         return;
-    } else if(result != VK_SUCCESS) {
+    } else if (result != VK_SUCCESS) {
         throw std::runtime_error(string_VkResult(result));
     }
 
@@ -638,11 +644,10 @@ void Vulkan::renderFrame() {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
-    auto found = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const QueueFamily &family) {
-        return family.graphics;
-    });
+    auto &presentQueue = queueFamilyMap.find(QueueType::PRESENT)->second;
+    auto &graphicsQueue = queueFamilyMap.find(QueueType::GRAPHICS)->second;
 
-    VK_CHECK(vkQueueSubmit(found->queue, 1, &submitInfo, inFlightFence))
+    VK_CHECK(vkQueueSubmit(graphicsQueue.queue, 1, &submitInfo, inFlightFence))
 
     VkPresentInfoKHR presentInfo = {VK_STRUCTURE_TYPE_PRESENT_INFO_KHR};
     presentInfo.waitSemaphoreCount = 1;
@@ -651,9 +656,5 @@ void Vulkan::renderFrame() {
     presentInfo.pSwapchains = &swapChain;
     presentInfo.pImageIndices = &imageIndex;
 
-    auto presentQueueFound = std::find_if(queueFamilies.begin(), queueFamilies.end(), [](const QueueFamily &family) {
-        return family.present;
-    });
-
-    VK_CHECK(vkQueuePresentKHR(presentQueueFound->queue, &presentInfo));
+    VK_CHECK(vkQueuePresentKHR(presentQueue.queue, &presentInfo));
 }
