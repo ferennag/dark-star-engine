@@ -558,7 +558,7 @@ void Vulkan::recordCommands(VkCommandBuffer &commandBuffer, uint32_t imageIndex)
     VK_CHECK(vkBeginCommandBuffer(commandBuffer, &commandBufferBeginInfo))
 
     VkClearValue clearValue = {
-            .color = {{0.2f, 0.2f, 0.2f, 1.0f}},
+            .color = {{0.01f, 0.01f, 0.01f, 1.0f}},
     };
 
     VkRenderPassBeginInfo renderPassBeginInfo = {VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
