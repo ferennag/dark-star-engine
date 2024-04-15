@@ -207,13 +207,26 @@ std::vector<QueueFamily> Vulkan::fetchAvailableQueueFamilies() {
         QueueFamily family = {
                 .properties = properties[i],
                 .index = i,
-                .graphics = (bool) (properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT),
-                .compute = (bool) (properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT),
+                .features = std::vector<QueueFeature>()
         };
+
+        if (properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+            family.features.push_back(QUEUE_FEATURE_GRAPHICS);
+        }
+
+        if (properties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) {
+            family.features.push_back(QUEUE_FEATURE_COMPUTE);
+        }
+
+        if (properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) {
+            family.features.push_back(QUEUE_FEATURE_TRANSFER);
+        }
 
         VkBool32 presentSupported = VK_FALSE;
         VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice.vkPhysicalDevice, i, surface, &presentSupported));
-        family.present = presentSupported == VK_TRUE;
+        if (presentSupported) {
+            family.features.push_back(QUEUE_FEATURE_PRESENT);
+        }
 
         result.push_back(family);
     }
@@ -280,14 +293,8 @@ void Vulkan::createDevice() {
     for (auto &queueFamily: queueFamilies) {
         vkGetDeviceQueue(device, queueFamily.index, 0, &queueFamily.queue);
 
-        if (queueFamily.graphics) {
-            queueFamilyMap.emplace(QueueType::GRAPHICS, queueFamily);
-        }
-        if (queueFamily.compute) {
-            queueFamilyMap.emplace(QueueType::COMPUTE, queueFamily);
-        }
-        if (queueFamily.present) {
-            queueFamilyMap.emplace(QueueType::PRESENT, queueFamily);
+        for(auto &type: queueFamily.features) {
+            queueFamilyMap.emplace(type, queueFamily);
         }
     }
 }
@@ -336,7 +343,7 @@ VkPresentModeKHR Vulkan::selectPresentMode() {
 void Vulkan::createSwapChain() {
     surfaceFormat = selectSurfaceFormat();
 
-    auto presentQueue = queueFamilyMap.find(QueueType::PRESENT)->second;
+    auto presentQueue = queueFamilyMap.find(QueueFeature::QUEUE_FEATURE_PRESENT)->second;
     VkSurfaceCapabilitiesKHR surfaceCapabilities;
     VK_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice.vkPhysicalDevice, surface, &surfaceCapabilities))
 
@@ -597,7 +604,7 @@ void Vulkan::createCommandPool() {
     VkCommandPoolCreateInfo createInfo = {VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
     createInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    auto graphicsQueue = queueFamilyMap.find(QueueType::GRAPHICS)->second;
+    auto graphicsQueue = queueFamilyMap.find(QueueFeature::QUEUE_FEATURE_GRAPHICS)->second;
 
     createInfo.queueFamilyIndex = graphicsQueue.index;
     VK_CHECK(vkCreateCommandPool(device, &createInfo, allocationCallbacks, &commandPool));
@@ -701,8 +708,8 @@ void Vulkan::renderFrame() {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = &renderFinishedSemaphore;
 
-    auto &presentQueue = queueFamilyMap.find(QueueType::PRESENT)->second;
-    auto &graphicsQueue = queueFamilyMap.find(QueueType::GRAPHICS)->second;
+    auto &presentQueue = queueFamilyMap.find(QueueFeature::QUEUE_FEATURE_PRESENT)->second;
+    auto &graphicsQueue = queueFamilyMap.find(QueueFeature::QUEUE_FEATURE_GRAPHICS)->second;
 
     VK_CHECK(vkQueueSubmit(graphicsQueue.queue, 1, &submitInfo, inFlightFence))
 

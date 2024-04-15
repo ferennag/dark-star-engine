@@ -28,20 +28,19 @@ typedef struct PhysicalDevice {
     uint32_t priority;
 } PhysicalDevice;
 
+enum QueueFeature {
+    QUEUE_FEATURE_GRAPHICS,
+    QUEUE_FEATURE_PRESENT,
+    QUEUE_FEATURE_COMPUTE,
+    QUEUE_FEATURE_TRANSFER
+};
+
 typedef struct QueueFamily {
     VkQueueFamilyProperties properties;
     uint32_t index;
-    bool graphics;
-    bool present;
-    bool compute;
+    std::vector<QueueFeature> features;
     VkQueue queue;
 } QueueFamily;
-
-enum QueueType {
-    GRAPHICS,
-    PRESENT,
-    COMPUTE
-};
 
 struct Vertex {
     glm::vec3 position;
@@ -97,7 +96,7 @@ private:
     VkExtent2D swapChainExtent;
 
     std::vector<QueueFamily> queueFamilies;
-    std::multimap<QueueType, QueueFamily> queueFamilyMap;
+    std::multimap<QueueFeature, QueueFamily> queueFamilyMap;
     std::vector<VkImage> images;
     std::vector<VkImageView> imageViews;
     std::vector<VkFramebuffer> frameBuffers;
