@@ -21,6 +21,8 @@ void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
 }
 
 Vulkan::~Vulkan() {
+    vkDeviceWaitIdle(device);
+    
     vkDestroyFence(device, inFlightFence, allocationCallbacks);
     vkDestroySemaphore(device, imageAvailableSemaphore, allocationCallbacks);
     vkDestroySemaphore(device, renderFinishedSemaphore, allocationCallbacks);
