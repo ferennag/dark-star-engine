@@ -6,9 +6,15 @@
 #include "core/file.h"
 
 const std::vector<Vertex> vertices = {
-        {{0.0f,  -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
+        // Bottom left
+        {{-0.5f,  0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
         {{0.5f,  0.5f,  0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{-0.5f, 0.5f,  0.0f}, {0.0f, 0.0f, 1.0f}}
+        {{-0.5f, -0.5f,  0.0f}, {0.0f, 0.0f, 1.0f}},
+
+        // Top right
+        {{-0.5f,  -0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+        {{0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+        {{0.5f,  -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}},
 };
 
 void Vulkan::initialize(const char *applicationName, SDL_Window *window) {
@@ -666,7 +672,7 @@ void Vulkan::recordCommands(VkCommandBuffer &commandBuffer, uint32_t imageIndex)
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
 
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    vkCmdDraw(commandBuffer, vertices.size(), 1, 0, 0);
 
     vkCmdEndRenderPass(commandBuffer);
 

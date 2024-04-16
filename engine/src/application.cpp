@@ -60,6 +60,7 @@ bool Application::processEvents() {
 
 bool Application::handleKeyboardEvent(const SDL_KeyboardEvent &event) {
     switch (event.keysym.sym) {
+        case SDLK_q:
         case SDLK_ESCAPE:
             return false;
         default:
