@@ -22,6 +22,7 @@ add_library(dark_star_engine SHARED
         src/renderer/vulkan.h
         src/core/file.cpp
         src/core/file.h
+        src/renderer/vulkan_types.h
 )
 
 target_link_libraries(dark_star_engine SDL2::SDL2 Vulkan::Vulkan glm)
